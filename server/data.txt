@@ -1,0 +1,29 @@
+{
+  "model_settings": {
+    "remove_thinking": true,
+    "remove_patterns": [
+      "<think>[\\s\\S]*?<\\/think>",
+      "^<think>.*$",
+      "^.*<\\/think>$",
+      "<think>",
+      "<\\/think>"
+    ],
+    "format_output": true,
+    "max_tokens": 2000
+  },
+  "response_filters": {
+    "strip_metadata": true,
+    "clean_special_chars": true,
+    "improve_formatting": true,
+    "numbered_list_spacing": true
+  },
+  "formatting_rules": {
+    "add_paragraph_breaks": true,
+    "space_after_numbers": true,
+    "space_after_points": true,
+    "format_numbered_lists": true,
+    "format_bullet_points": true,
+    "paragraph_spacing": 1,
+    "line_length_limit": 80
+  }
+} 

@@ -1,0 +1,59 @@
+Mental Health Information
+
+Depression:
+Depression is a common mental health disorder characterized by persistent sadness, loss of interest in activities once enjoyed, and an inability to carry out daily activities. Symptoms include feelings of worthlessness or guilt, difficulty concentrating, changes in appetite, sleep disturbances, and thoughts of death or suicide.
+
+Anxiety:
+Anxiety disorders involve excessive worry, fear, or nervousness. Common types include Generalized Anxiety Disorder (GAD), Social Anxiety Disorder, and Panic Disorder. Symptoms may include restlessness, irritability, muscle tension, difficulty controlling worry, and panic attacks.
+
+Post-Traumatic Stress Disorder (PTSD):
+PTSD is triggered by experiencing or witnessing a traumatic event. Symptoms include flashbacks, nightmares, severe anxiety, and uncontrollable thoughts about the event. People with PTSD may avoid situations that remind them of the trauma and may have strong negative reactions to ordinary stimuli.
+
+Bipolar Disorder:
+Bipolar disorder causes extreme mood swings that include emotional highs (mania or hypomania) and lows (depression). During manic episodes, individuals may feel euphoric, have lots of energy, and engage in risky behavior. During depressive episodes, they may feel sad, hopeless, and lose interest in activities.
+
+Schizophrenia:
+Schizophrenia is a serious mental disorder in which people interpret reality abnormally. It may result in hallucinations, delusions, and extremely disordered thinking and behavior. Symptoms typically start between ages 16 and 30.
+
+Coping Strategies:
+- Practice mindfulness and meditation
+- Maintain a regular exercise routine
+- Ensure adequate sleep
+- Build a strong support network
+- Limit alcohol and avoid drugs
+- Set realistic goals
+- Learn stress management techniques
+- Seek professional help when needed
+
+Treatment Options:
+- Psychotherapy (talk therapy)
+- Cognitive Behavioral Therapy (CBT)
+- Medication (antidepressants, anti-anxiety medications, mood stabilizers)
+- Support groups
+- Lifestyle changes
+- In severe cases, hospitalization may be required
+
+When to Seek Help:
+Seek professional help if mental health symptoms interfere with daily functioning, relationships, or quality of life. Always get immediate help if experiencing thoughts of self-harm or suicide.
+
+{
+  "showThinking": false,
+  "debugMode": false,
+  "chatSettings": {
+    "separateThinking": true,
+    "logThinkingToConsole": false,
+    "showThinkingToAdmin": false,
+    "saveThinkingHistory": false
+  },
+  "userPermissions": {
+    "patient": {
+      "canSeeThinking": false
+    },
+    "doctor": {
+      "canSeeThinking": false
+    },
+    "admin": {
+      "canSeeThinking": true
+    }
+  }
+} 
