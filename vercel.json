@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "cd client && npm install && npm run build",
+  "buildCommand": "npm install && cd client && npm install && npm run build",
   "outputDirectory": "client/build",
   "rewrites": [
     {
@@ -16,5 +16,8 @@
     "api/**/*.js": {
       "memory": 1024
     }
+  },
+  "env": {
+    "REACT_APP_API_URL": "/api"
   }
 } 
