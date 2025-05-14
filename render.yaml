@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: ful-website-backend
+    env: node
+    region: frankfurt
+    buildCommand: cd server && npm install
+    startCommand: cd server && node index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: DB_HOST
+        fromDatabase:
+          name: ful-website-db
+          property: host
+      - key: DB_NAME
+        value: postITDb
+
+  - type: web
+    name: ful-website-frontend
+    env: node
+    region: frankfurt
+    buildCommand: cd client && npm install && npm run build
+    startCommand: cd client && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: REACT_APP_API_URL
+        value: https://ful-website-backend.onrender.com
+
+databases:
+  - name: ful-website-db
+    region: frankfurt
+    databaseName: postITDb
+    user: Bashar 
