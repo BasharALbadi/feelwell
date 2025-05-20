@@ -8,7 +8,7 @@ import bcrypt from "bcrypt";
 import PostModel from "./Models/Posts.js";
 import { callGroqDirectly } from "./directApi.js";
 import userRoutes from "./Routes/userRoutes.js";
-import chatRoutes from "./routes/chatRoutes.js";
+import chatRoutes from "./Routes/chatRoutes.js";
 import messageRoutes from "./Routes/messageRoutes.js";
 import path from "path";
 import fs from "fs";

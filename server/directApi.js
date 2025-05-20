@@ -3,11 +3,12 @@ import path from 'path';
 import axios from 'axios';
 
 // The API key - hardcoded for direct testing
-const API_KEY = "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";
-// Define available models with options to fallback
-const MODELS = {
-  primary: "deepseek-r1-distill-llama-70b", // Higher quality model
-  fallback: "llama3-8b-8192" // Definitely available model as backup
+const API_KEY = "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";
+// Define model options
+const modelOptions = {
+  primary: "gemma2-9b-it", // Main model
+  fallback: "gemma2-9b-it", // Fallback is the same model
+  default: "gemma2-9b-it" // Default choice
 };
 
 // Load context data
@@ -32,7 +33,7 @@ export async function callGroqDirectly(message) {
     console.log("📁 Context data available:", contextData ? "YES" : "NO");
     
     // First try with the primary model
-    let currentModel = MODELS.primary;
+    let currentModel = modelOptions.primary;
     console.log(`🤖 Attempting with primary model: ${currentModel}`);
     
     const requestData = {
@@ -86,10 +87,10 @@ Respond directly with clear, helpful information to the user's questions.`
     } catch (primaryError) {
       // If primary model fails, try the fallback model
       console.warn(`⚠️ Primary model failed: ${primaryError.message}`);
-      console.log(`🔄 Trying fallback model: ${MODELS.fallback}`);
+      console.log(`🔄 Trying fallback model: ${modelOptions.fallback}`);
       
       // Update model in request data
-      requestData.model = MODELS.fallback;
+      requestData.model = modelOptions.fallback;
       
       const fallbackResponse = await axios({
         method: 'post',

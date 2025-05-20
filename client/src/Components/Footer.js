@@ -11,7 +11,7 @@ const Footer = () => {
           <Col lg={4} className="mb-4 mb-lg-0">
             <div className="d-flex align-items-center mb-3">
               <FaHospital size={20} className="me-2" />
-              <h5 className="mb-0">MedConnect</h5>
+              <h5 className="mb-0">FeelWell</h5>
             </div>
             <p className="small">
               Providing comprehensive healthcare solutions with cutting-edge technology for better patient outcomes.
@@ -45,7 +45,7 @@ const Footer = () => {
             </div>
             <div className="mb-2 d-flex align-items-center">
               <FaEnvelope size={16} className="me-2" />
-              <span>contact@medconnect.com</span>
+              <span>contact@feelwell.com</span>
             </div>
             <div className="mb-2 d-flex align-items-center">
               <FaMapMarkerAlt size={16} className="me-2" />
@@ -59,7 +59,7 @@ const Footer = () => {
         <Row className="pt-3 border-top border-secondary">
           <Col className="text-center">
             <p className="small mb-0">
-              &copy; {new Date().getFullYear()} MedConnect Health Portal. All rights reserved.
+              &copy; {new Date().getFullYear()} FeelWell Health Portal. All rights reserved.
             </p>
           </Col>
         </Row>

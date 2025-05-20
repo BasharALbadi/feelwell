@@ -20,7 +20,6 @@ import { Link } from 'react-router-dom';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { SERVER_URL, getApiUrl } from '../config';
-import { filterThinkingContent } from '../utils/chatConfig';
 
 const DoctorsDashboard = () => {
   const navigate = useNavigate();
@@ -82,10 +81,17 @@ const DoctorsDashboard = () => {
     
     console.log('Loading messages for doctor ID:', doctorId);
     
-    // جلب جميع الرسائل الموجهة للطبيب
-    axios.get(getApiUrl(`api/messages/doctor/${doctorId}`))
+    // Test the API endpoint directly first
+    axios.get(getApiUrl(`api/messages`))
+      .then(() => {
+        console.log('API endpoint /api/messages is accessible');
+        
+        // Now try to get the doctor's messages
+        return axios.get(getApiUrl(`api/messages/doctor/${doctorId}`));
+      })
       .then(response => {
         console.log("Incoming messages API response:", response.status, response.statusText);
+        console.log("Full response data:", response.data);
         
         if (response.data && response.data.messages) {
           console.log(`Received ${response.data.messages.length} messages from server`);
@@ -103,27 +109,62 @@ const DoctorsDashboard = () => {
                 date: msg.createdAt
               });
             });
+          } else {
+            console.log('No messages found in server response even though response was successful');
           }
           
           // ترتيب الرسائل حسب التاريخ (الأحدث أولاً)
           setIncomingMessages(response.data.messages.sort((a, b) => 
             new Date(b.createdAt) - new Date(a.createdAt)
           ));
+          
+          // إذا لم تكن هناك رسائل، أظهر رسالة للمستخدم
+          if (response.data.messages.length === 0) {
+            toast.info('No messages found. This could be normal if no one has sent you messages yet.');
+          }
         } else {
-          console.log('No messages found in response:', response.data);
+          console.log('No messages found in response or invalid response format:', response.data);
+          toast.warn('No messages found in the response. The API endpoint might not be returning data in the expected format.');
           setIncomingMessages([]);
         }
       })
       .catch(error => {
         console.error("Error loading incoming messages:", error);
-        console.error("Error details:", error.response?.data);
-        toast.error("Failed to load incoming messages");
-        setIncomingMessages([]);
+        
+        // تفاصيل أكثر للخطأ
+        if (error.response) {
+          console.error("Server response:", error.response.status, error.response.statusText);
+          console.error("Response data:", error.response.data);
+          toast.error(`Failed to load messages: ${error.response.status} ${error.response.statusText}`);
+        } else if (error.request) {
+          console.error("No response received from server");
+          toast.error("Server did not respond. Check your connection.");
+        } else {
+          console.error("Error details:", error.message);
+          toast.error(`Error: ${error.message}`);
+        }
+        
+        // محاولة بديلة للحصول على الرسائل باستخدام نقطة نهاية مختلفة
+        console.log('Trying alternative API endpoint for doctor messages...');
+        axios.get(getApiUrl(`api/messages/doctor-received/${doctorId}`))
+          .then(altResponse => {
+            console.log('Alternative endpoint response:', altResponse.data);
+            if (altResponse.data && altResponse.data.messages) {
+              setIncomingMessages(altResponse.data.messages.sort((a, b) => 
+                new Date(b.createdAt) - new Date(a.createdAt)
+              ));
+              toast.success('Messages loaded using alternative method');
+            }
+          })
+          .catch(altError => {
+            console.error('Alternative endpoint also failed:', altError);
+            setIncomingMessages([]);
+          });
       })
       .finally(() => {
         setLoadingIncomingMessages(false);
       });
-  }, [user]);
+  }, [user, toast]);
 
   // تحميل الرسائل الواردة عند فتح القسم
   useEffect(() => {
@@ -307,6 +348,35 @@ const DoctorsDashboard = () => {
     }
   }, [activeTab, loadPatientChats]);
 
+  // Function to process messages and apply correct roles
+  const processMessages = (messages) => {
+    if (!messages || !Array.isArray(messages)) return [];
+    
+    return messages.map((msg, index) => {
+      const messageObj = { ...msg };
+      
+      // FIXED ROLE ASSIGNMENT BY POSITION:
+      // First message is always from assistant (welcome message)
+      // Then alternate user/assistant (odd user, even assistant)
+      messageObj.role = index === 0 ? 'assistant' : (index % 2 === 1 ? 'user' : 'assistant');
+      
+      // If a message has fromDoctor flag, ensure its role is assistant
+      if (messageObj.fromDoctor) {
+        messageObj.role = 'assistant';
+      }
+      
+      // Log for debugging
+      if (msg.role !== messageObj.role) {
+        console.log(`Forced role in doctor dashboard: "${msg.role || 'undefined'}" → "${messageObj.role}" at index ${index}`);
+      }
+      
+      return {
+        ...messageObj,
+        timestamp: messageObj.timestamp || new Date()
+      };
+    });
+  };
+
   // Añadir o actualizar la función loadChatMessages si no existe
   const loadChatMessages = async (chatId) => {
     try {
@@ -318,11 +388,11 @@ const DoctorsDashboard = () => {
       if (response.data && response.data.conversation) {
         setSelectedChat(response.data.conversation);
         
-        // Filter thinking content from messages
-        const messages = response.data.conversation.messages || [];
-        const filteredMessages = await filterThinkingContent(messages, user?.userType || 'doctor');
+        // Process messages to ensure correct roles
+        const processedMessages = processMessages(response.data.conversation.messages || []);
+        console.log("Processed messages with roles:", processedMessages.map(m => m.role));
         
-        setChatMessages(filteredMessages);
+        setChatMessages(processedMessages);
         setChatModalOpen(true);
       } else {
         toast.error("Could not load conversation");
@@ -335,27 +405,53 @@ const DoctorsDashboard = () => {
 
   // Función para enviar respuesta médica al paciente
   const sendMedicalResponse = async () => {
-    if (!doctorResponse.trim() || !selectedChat?._id) return;
+    if (!doctorResponse.trim() || !selectedChat?._id) {
+      toast.error('Please enter a response message');
+      return;
+    }
+    
+    console.log("Sending medical response to:", selectedChat._id);
+    console.log("Doctor ID:", user._id);
+    console.log("Response content length:", doctorResponse.length);
     
     try {
+      // Crear el objeto de mensaje que será enviado al servidor
+      const messagePayload = {
+        content: doctorResponse,
+        doctorId: user._id,
+        // Asegurar que role esté definido explícitamente
+        role: 'assistant'
+      };
+      
+      console.log("Sending message payload:", messagePayload);
+      
       const response = await axios.post(
         getApiUrl(`api/chat/conversations/${selectedChat._id}/doctor-response`),
-        {
-          content: doctorResponse,
-          doctorId: user._id
-        }
+        messagePayload
       );
       
+      console.log("Server response:", response.data);
+      
       if (response.data.success) {
-        // Actualizar localmente los mensajes del chat
+        // Crear un nuevo mensaje con role explícito
         const newMessage = {
-          role: 'assistant',
+          role: 'assistant', // Always assistant for doctor's messages
           content: doctorResponse,
           timestamp: new Date(),
           fromDoctor: true
         };
         
-        setChatMessages([...chatMessages, newMessage]);
+        console.log("Created new message for chat history:", newMessage);
+        
+        // Apply message processing to maintain consistency
+        const updatedMessages = processMessages([...chatMessages, newMessage]);
+        setChatMessages(updatedMessages);
+        
+        // Log first few messages after update for debugging
+        console.log("First 3 processed messages:", 
+          updatedMessages.slice(0, 3).map(m => ({role: m.role, content: m.content.substring(0, 20) + '...'}))
+        );
+        
         setDoctorResponse(''); // Limpiar el formulario
         toast.success('Response sent successfully');
         
@@ -366,10 +462,30 @@ const DoctorsDashboard = () => {
             status: 'in-progress'
           });
         }
+      } else {
+        toast.error('Server reported an issue sending the response');
       }
     } catch (error) {
       console.error('Error sending medical response:', error);
-      toast.error('Failed to send response');
+      
+      // Mostrar mensaje de error con más detalles
+      let errorMessage = 'Failed to send response';
+      if (error.response) {
+        // La solicitud fue hecha y el servidor respondió con un código de estado
+        // que no está en el rango 2xx
+        console.error("Server response error:", error.response.status, error.response.data);
+        errorMessage = `Error ${error.response.status}: ${error.response.data.message || 'Server error'}`;
+      } else if (error.request) {
+        // La solicitud fue hecha pero no se recibió respuesta
+        console.error("No response received:", error.request);
+        errorMessage = 'No response from server. Check connection.';
+      } else {
+        // Ocurrió un error al configurar la solicitud
+        console.error("Request setup error:", error.message);
+        errorMessage = `Request error: ${error.message}`;
+      }
+      
+      toast.error(errorMessage);
     }
   };
 
@@ -389,15 +505,18 @@ const DoctorsDashboard = () => {
         );
         
         if (response.data.success) {
-          // إضافة الرسالة محلياً
+          // إضافة الرسالة محلياً مع role صحيح
           const newMessage = {
-            role: 'assistant',
+            role: 'assistant', // Always assistant for doctor messages
             content: doctorResponse,
             timestamp: new Date(),
             fromDoctor: true
           };
           
-          setChatMessages([...chatMessages, newMessage]);
+          // Apply message processing to maintain consistency
+          const updatedMessages = processMessages([...chatMessages, newMessage]);
+          setChatMessages(updatedMessages);
+          
           setDoctorResponse(''); // تنظيف النموذج
           toast.success('Response sent successfully');
         }
@@ -1005,6 +1124,11 @@ const DoctorsDashboard = () => {
                   const showDateSeparator = index > 0 && 
                     new Date(msg.timestamp).toDateString() !== new Date(chatMessages[index-1].timestamp).toDateString();
                   
+                  // Use role to determine message display
+                  const isUserMessage = msg.role === 'user';
+                  const isDoctorMessage = msg.role === 'assistant' && msg.fromDoctor;
+                  const isAIMessage = msg.role === 'assistant' && !msg.fromDoctor;
+                  
                   return (
                     <React.Fragment key={index}>
                       {showDateSeparator && (
@@ -1013,15 +1137,15 @@ const DoctorsDashboard = () => {
                         </div>
                       )}
                       <div 
-                        className={`chat-message mb-3 ${msg.role === 'user' ? 'user-message' : 'ai-message'}`}
+                        className={`chat-message mb-3 ${isUserMessage ? 'user-message' : 'ai-message'}`}
                       >
                         <div className="message-wrapper d-flex">
                           <div className="message-avatar me-2">
-                            {msg.role === 'user' ? (
+                            {isUserMessage ? (
                               <div className="avatar-circle bg-primary text-white">
                                 <FaUser size={16} />
                               </div>
-                            ) : msg.fromDoctor ? (
+                            ) : isDoctorMessage ? (
                               <div className="avatar-circle bg-success text-white">
                                 <FaUserMd size={16} />
                               </div>
@@ -1032,13 +1156,17 @@ const DoctorsDashboard = () => {
                             )}
                           </div>
                           <div className="message-content">
-                            <div className={`message-bubble p-3 rounded-3 ${msg.role === 'user' ? 'bg-primary text-white' : msg.fromDoctor ? 'bg-success text-white' : 'bg-white'}`}>
+                            <div className={`message-bubble p-3 rounded-3 ${
+                              isUserMessage ? 'bg-primary text-white' : 
+                              isDoctorMessage ? 'bg-success text-white' : 
+                              'bg-white'
+                            }`}>
                               <div className="message-text">{msg.content}</div>
                             </div>
                             <div className="message-info">
                               <small className="text-muted">
                                 {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                {msg.fromDoctor && <span className="ms-2 badge bg-light text-dark">Doctor's Response</span>}
+                                {isDoctorMessage && <span className="ms-2 badge bg-light text-dark">Doctor's Response</span>}
                               </small>
                             </div>
                           </div>
@@ -1339,31 +1467,43 @@ const DoctorsDashboard = () => {
     }
 
     const doctorId = user?.id || user?._id;
+    const doctorEmail = user?.email;
     const patientId = patient?.id || patient?._id;
-    const endpoint = getApiUrl('api/test-connection');
+    const patientEmail = patient?.email;
     
     // Show testing toast
     toast.info("Testing connection...", { autoClose: false, toastId: "connection-test" });
     
     console.log("Testing connection with:", {
       doctorId,
+      doctorEmail,
       patientId,
-      endpoint
+      patientEmail
     });
     
     // Test a simple GET request first to check server connectivity
     axios.get(getApiUrl('api/messages')).then(response => {
       console.log("Server is reachable:", response.status);
       
-      // Now try a direct API call to messages route
+      // Now try a direct API call to messages route with multiple identifiers
       axios.post(getApiUrl('api/messages/send'), {
+        // Sender (doctor) information - provide multiple identifiers
         senderId: doctorId,
-        receiverId: patientId,
-        content: "This is a test message",
-        senderType: "doctor",
-        messageType: "test",
+        senderEmail: doctorEmail,
         senderName: user?.fullname || user?.name,
-        receiverName: patient?.fullname || patient?.name
+        senderType: "doctor",
+        
+        // Receiver (patient) information - provide multiple identifiers
+        receiverId: patientId,
+        receiverEmail: patientEmail,
+        receiverName: patient?.fullname || patient?.name,
+        
+        // Message content
+        content: "This is a test message",
+        messageType: "test",
+        
+        // Required role field for message validation
+        role: "assistant"
       })
       .then(response => {
         console.log("Test message sent successfully:", response.data);
@@ -1372,18 +1512,51 @@ const DoctorsDashboard = () => {
       })
       .catch(error => {
         console.error("Test message failed:", error);
-        toast.dismiss("connection-test");
-        toast.error(`Connection test failed: ${error.response?.data?.message || error.message}`);
         
-        // Log detailed error information for debugging
-        console.error("Full error details:", {
-          status: error.response?.status,
-          statusText: error.response?.statusText,
-          data: error.response?.data,
-          url: getApiUrl('api/messages/send'),
-          senderId: doctorId,
-          receiverId: patientId
-        });
+        // Try with the alternative email-based route
+        if (doctorEmail && patientEmail) {
+          console.log("Trying alternative method using email identifiers...");
+          
+          axios.post(getApiUrl('api/messages/send-by-email'), {
+            senderEmail: doctorEmail,
+            senderName: user?.fullname || user?.name,
+            senderType: "doctor",
+            
+            receiverEmail: patientEmail,
+            receiverName: patient?.fullname || patient?.name,
+            
+            content: "This is a test message sent using email identifiers",
+            messageType: "test",
+            role: "assistant"
+          })
+          .then(altResponse => {
+            console.log("Alternative test message sent successfully:", altResponse.data);
+            toast.dismiss("connection-test");
+            toast.success("Connection test passed using alternative method!");
+          })
+          .catch(altError => {
+            console.error("Alternative test message failed:", altError);
+            toast.dismiss("connection-test");
+            toast.error(`Connection test failed with both methods. Check console for details.`);
+            
+            // Log all identifiers for debugging
+            console.error("All available identifiers:", {
+              doctor: {
+                id: doctorId,
+                email: doctorEmail,
+                name: user?.fullname || user?.name
+              },
+              patient: {
+                id: patientId, 
+                email: patientEmail,
+                name: patient?.fullname || patient?.name
+              }
+            });
+          });
+        } else {
+          toast.dismiss("connection-test");
+          toast.error(`Connection test failed: ${error.response?.data?.message || error.message}`);
+        }
       });
     })
     .catch(error => {
@@ -1435,26 +1608,22 @@ const DoctorsDashboard = () => {
       });
   };
 
-  // Helper function to format doctor name - remove duplicate "Dr." prefixes
+  // تحسين دالة تنسيق اسم الطبيب
   const formatDoctorName = (name) => {
-    if (!name) return 'Unknown';
+    if (!name) return 'Doctor';
     
-    // إزالة جميع أنواع Dr/Doctor من الاسم
-    const originalName = name;
-    const nameWithoutPrefix = name
-      .replace(/\bDr\.\s*/gi, '')  // إزالة Dr. متبوعة بمسافة
-      .replace(/\bDr\s*/gi, '')    // إزالة Dr متبوعة بمسافة
-      .replace(/\bDoctor\s*/gi, '') // إزالة Doctor متبوعة بمسافة
-      .replace(/^\s+|\s+$/g, '');  // إزالة المسافات في البداية والنهاية
+    // إزالة المحارف الخاصة التي قد تسبب مشاكل في HTML أو JSON
+    let formattedName = name.replace(/["'&<>]/g, '');
     
-    // إذا كان الاسم يحتوي على Dr، أضف Dr. واحدة فقط في البداية
-    const hasDrPrefix = /\b(Dr\.?|Doctor)\b/i.test(originalName);
-    const finalName = hasDrPrefix ? `Dr\\. ${nameWithoutPrefix}` : nameWithoutPrefix;
+    // التأكد من عدم تكرار "Dr." في بداية الاسم
+    if (!formattedName.startsWith('Dr.') && !formattedName.startsWith('Dr ')) {
+      formattedName = `Dr. ${formattedName}`;
+    }
     
-    // تنظيف المسافات المزدوجة
-    const cleanedName = finalName.replace(/\s{2,}/g, ' ').trim();
+    // في السابق كان هناك استبدال للنقطة بـ \\. وهذا مربك - نحذفه
+    // formattedName = formattedName.replace(/\./g, '\\.');
     
-    return cleanedName;
+    return formattedName;
   };
 
   // إضافة المزيد من قوالب الرسائل
@@ -1515,50 +1684,98 @@ Dr. ${doctorName}`);
 
   // دالة إرسال الرسالة
   const submitDirectMessage = () => {
-    if (!messageContent.trim() || !messagePatient) return;
+    if (!messageContent.trim() || !messagePatient) {
+      toast.error("Please enter a message and select a recipient");
+      return;
+    }
     
     // استخدام دالة formatDoctorName لتنظيف اسم الطبيب
     const cleanDoctorName = formatDoctorName(user?.fullname || user?.name || 'Doctor');
     
-    console.log('Sending message with data:', {
-      senderId: user?.id || user?._id,
-      receiverId: messagePatient.id || messagePatient._id,
-      content: messageContent,
-      senderType: 'doctor',
-      messageType: 'direct',
-      senderName: cleanDoctorName
+    // احصل على معرفات بديلة للطبيب والمريض للتأكد من أن الخادم يمكنه العثور عليهما
+    const doctorId = user?.id || user?._id;
+    const patientId = messagePatient?.id || messagePatient?._id;
+    const patientEmail = messagePatient?.email; // استخدام البريد الإلكتروني كبديل إضافي
+    
+    console.log('Attempting to send message with this information:', {
+      doctorId: doctorId,
+      patientId: patientId,
+      patientEmail: patientEmail,
+      doctorName: cleanDoctorName,
+      patientName: messagePatient?.fullname || messagePatient?.name || 'Patient'
     });
     
-    // Send direct message - using getApiUrl helper for correct formatting
+    // محاولة إرسال رسالة بكل المعلومات الممكنة للعثور على المستخدمين
     axios.post(getApiUrl('api/messages/send'), {
-      senderId: user?.id || user?._id,
-      receiverId: messagePatient.id || messagePatient._id,
-      content: messageContent,
-      senderType: 'doctor',
-      messageType: 'direct',
+      // معلومات المرسل (الطبيب)
+      senderId: doctorId,
+      senderEmail: user?.email,
       senderName: cleanDoctorName,
-      receiverName: messagePatient?.fullname || messagePatient?.name || 'Patient'
+      senderType: 'doctor',
+      
+      // معلومات المستقبل (المريض)
+      receiverId: patientId,
+      receiverEmail: patientEmail,
+      receiverName: messagePatient?.fullname || messagePatient?.name || 'Patient',
+      
+      // معلومات الرسالة
+      content: messageContent,
+      messageType: 'direct',
+      role: 'assistant', // إضافة الدور الإلزامي للرسالة
+      
+      // حقول إضافية قد تساعد في العثور على المستخدمين
+      doctorId: doctorId,
+      patientId: patientId
     })
     .then(response => {
       console.log('Message sent successfully:', response.data);
       toast.success('Message sent successfully');
-      // Close modal after sending
+      // إغلاق النافذة بعد الإرسال
       setMessageModal(false);
       setMessageContent('');
     })
     .catch(error => {
       console.error('Failed to send message:', error);
-      console.error('Response data:', error.response?.data);
-      console.error('Error details:', {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        url: getApiUrl('api/messages/send'),
-        data: {
-          senderId: user?.id || user?._id,
-          receiverId: messagePatient.id || messagePatient._id
-        }
-      });
-      toast.error(`Failed to send message: ${error.response?.data?.message || error.message || 'Unknown error'}`);
+      
+      // سجل تفاصيل أكثر حول الخطأ
+      let errorDetails = '';
+      if (error.response) {
+        console.error('Server response data:', error.response.data);
+        console.error('Server response status:', error.response.status);
+        errorDetails = error.response.data.message || error.response.statusText;
+      }
+      
+      // جرب طريقة بديلة إذا فشلت الطريقة الأولى
+      if (error.response && error.response.status === 404 && error.response.data.message.includes('not found')) {
+        toast.info('Trying alternative method to send message...');
+        
+        // استخدم الطريقة البديلة التي تعتمد على البريد الإلكتروني بدلاً من المعرفات
+        axios.post(getApiUrl('api/messages/send-by-email'), {
+          senderEmail: user?.email,
+          senderName: cleanDoctorName,
+          senderType: 'doctor',
+          
+          receiverEmail: patientEmail,
+          receiverName: messagePatient?.fullname || messagePatient?.name,
+          
+          content: messageContent,
+          messageType: 'direct',
+          role: 'assistant'
+        })
+        .then(response => {
+          console.log('Message sent via alternative method:', response.data);
+          toast.success('Message sent successfully (alternative method)');
+          setMessageModal(false);
+          setMessageContent('');
+        })
+        .catch(altError => {
+          console.error('Alternative method failed:', altError);
+          toast.error(`Could not send message using any method: ${errorDetails || altError.message || 'Unknown error'}`);
+        });
+      } else {
+        // عرض رسالة خطأ مفصلة
+        toast.error(`Failed to send message: ${errorDetails || error.message || 'Unknown error'}`);
+      }
     });
   };
 
@@ -2283,6 +2500,11 @@ Dr. ${doctorName}`);
                       const showDateSeparator = index > 0 && 
                         new Date(msg.timestamp).toDateString() !== new Date(chatMessages[index-1].timestamp).toDateString();
                       
+                      // Use role to determine message display
+                      const isUserMessage = msg.role === 'user';
+                      const isDoctorMessage = msg.role === 'assistant' && msg.fromDoctor;
+                      const isAIMessage = msg.role === 'assistant' && !msg.fromDoctor;
+                      
                       return (
                         <React.Fragment key={index}>
                           {showDateSeparator && (
@@ -2291,15 +2513,15 @@ Dr. ${doctorName}`);
                             </div>
                           )}
                           <div 
-                            className={`chat-message mb-3 ${msg.role === 'user' ? 'user-message' : 'ai-message'}`}
+                            className={`chat-message mb-3 ${isUserMessage ? 'user-message' : 'ai-message'}`}
                           >
                             <div className="message-wrapper d-flex">
                               <div className="message-avatar me-2">
-                                {msg.role === 'user' ? (
+                                {isUserMessage ? (
                                   <div className="avatar-circle bg-primary text-white">
                                     <FaUser size={16} />
                                   </div>
-                                ) : msg.fromDoctor ? (
+                                ) : isDoctorMessage ? (
                                   <div className="avatar-circle bg-success text-white">
                                     <FaUserMd size={16} />
                                   </div>
@@ -2310,13 +2532,17 @@ Dr. ${doctorName}`);
                                 )}
                               </div>
                               <div className="message-content">
-                                <div className={`message-bubble p-3 rounded-3 ${msg.role === 'user' ? 'bg-primary text-white' : msg.fromDoctor ? 'bg-success text-white' : 'bg-white'}`}>
+                                <div className={`message-bubble p-3 rounded-3 ${
+                                  isUserMessage ? 'bg-primary text-white' : 
+                                  isDoctorMessage ? 'bg-success text-white' : 
+                                  'bg-white'
+                                }`}>
                                   <div className="message-text">{msg.content}</div>
                                 </div>
                                 <div className="message-info">
                                   <small className="text-muted">
                                     {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                    {msg.fromDoctor && <span className="ms-2 badge bg-light text-dark">Doctor's Response</span>}
+                                    {isDoctorMessage && <span className="ms-2 badge bg-light text-dark">Doctor's Response</span>}
                                   </small>
                                 </div>
                               </div>

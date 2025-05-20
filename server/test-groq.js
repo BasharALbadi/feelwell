@@ -4,47 +4,38 @@ import dotenv from 'dotenv';
 // Load environment variables
 dotenv.config();
 
+// Configure API request
+const client = new Groq({
+  apiKey: process.env.key,
+});
+
 async function testGroqAPI() {
-  console.log('Starting Groq API test...');
-  console.log(`API key available: ${process.env.key ? 'YES' : 'NO'}`);
+  console.log("Testing Groq API...");
   
   try {
-    // Initialize the client
-    const groq = new Groq({
-      apiKey: process.env.key,
+    // Construct the payload
+    const chatCompletion = await client.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: "You are a helpful assistant. Keep your answers very brief."
+        },
+        {
+          role: "user",
+          content: "Hello, can you tell me about yourself?"
+        }
+      ],
+      model: 'gemma2-9b-it',
+      temperature: 0.7,
+      max_tokens: 200
     });
-    console.log('Client initialized');
     
-    // List models
-    try {
-      const models = await groq.models.list();
-      console.log('Available models:', models.data.map(m => m.id).join(', '));
-    } catch (err) {
-      console.error('Error listing models:', err.message);
-    }
-    
-    // Test completion
-    try {
-      console.log('Testing chat completion...');
-      const completion = await groq.chat.completions.create({
-        messages: [
-          { role: 'user', content: 'What are symptoms of anxiety?' }
-        ],
-        model: 'deepseek-r1-distill-llama-70b',
-        temperature: 0.5,
-        max_tokens: 100
-      });
-      
-      console.log('Completion successful!');
-      console.log('Response:', completion.choices[0].message.content);
-    } catch (err) {
-      console.error('Completion error:', err.message);
-      if (err.response) {
-        console.error('Error details:', err.response.data);
-      }
-    }
-  } catch (err) {
-    console.error('Failed to initialize client:', err.message);
+    console.log("API call successful!");
+    console.log("Response:", chatCompletion.choices[0].message.content);
+    return chatCompletion.choices[0].message.content;
+  } catch (error) {
+    console.error("API call failed:", error.message);
+    return null;
   }
 }
 

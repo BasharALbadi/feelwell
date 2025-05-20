@@ -1,0 +1,1 @@
+<h2 className="appTitle">Register with FeelWell</h2> 

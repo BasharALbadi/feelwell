@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-const MessageSchema = new mongoose.Schema({
+const messageSchema = new mongoose.Schema({
   senderId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -21,12 +21,12 @@ const MessageSchema = new mongoose.Schema({
   },
   senderType: {
     type: String,
-    enum: ['doctor', 'patient'],
+    enum: ['user', 'doctor', 'admin'],
     required: true
   },
   messageType: {
     type: String,
-    enum: ['direct', 'appointment', 'followup', 'result', 'consultation', 'system'],
+    enum: ['direct', 'test', 'automated', 'appointment', 'medical'],
     default: 'direct'
   },
   inReplyTo: {
@@ -41,15 +41,33 @@ const MessageSchema = new mongoose.Schema({
   },
   urgency: {
     type: String,
-    enum: ['normal', 'high'],
+    enum: ['low', 'normal', 'high', 'urgent'],
     default: 'normal'
   },
-  senderName: String,
-  receiverName: String
+  senderName: {
+    type: String,
+    required: true
+  },
+  receiverName: {
+    type: String,
+    required: true
+  },
+  // The role field is still needed for validation in some controllers
+  role: {
+    type: String,
+    enum: ['user', 'assistant', 'system'],
+    default: function() {
+      // Set default role based on senderType
+      return this.senderType === 'doctor' ? 'assistant' : 'user';
+    }
+  }
 }, { timestamps: true });
 
-// Index for faster queries
-MessageSchema.index({ senderId: 1, receiverId: 1 });
-MessageSchema.index({ receiverId: 1, read: 1 });
+// Add index for faster querying
+messageSchema.index({ senderId: 1 });
+messageSchema.index({ receiverId: 1 });
+messageSchema.index({ createdAt: -1 });
+messageSchema.index({ senderType: 1 });
+messageSchema.index({ messageType: 1 });
 
-export default mongoose.model('Message', MessageSchema); 
+export default mongoose.model('Message', messageSchema); 

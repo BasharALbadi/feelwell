@@ -1,62 +1,55 @@
-from dotenv import load_dotenv
+#!/usr/bin/env python3
 import os
-import requests
-import json
+import sys
+from groq import Groq
 
-# تحميل المتغيرات البيئية
-load_dotenv()
+# Get API key from environment or use a default for testing
+api_key = os.environ.get("GROQ_API_KEY", "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")
 
-# الحصول على مفتاح API
-api_key = os.getenv('key')
-if not api_key:
-    api_key = "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"
+client = Groq(api_key=api_key)
 
-print(f"🔑 Using API key: {api_key[:5]}...{api_key[-4:]}")
-
-# اختبار النماذج المختلفة
-models = ["llama3-8b-8192", "deepseek-r1-distill-llama-70b"]
-
-for model in models:
-    print(f"\n{'='*50}")
-    print(f"🔍 Testing model: {model}")
-    print(f"{'='*50}")
-    
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    
-    data = {
-        "model": model,
-        "messages": [
-            {"role": "user", "content": "What is anxiety? Answer in 20 words only."}
-        ],
-        "temperature": 0.7,
-        "max_tokens": 100
-    }
+def test_models():
+    """Test listing and using models"""
+    print("Testing Groq API connectivity...")
     
     try:
-        print("📤 Sending request...")
-        response = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers=headers,
-            json=data,
-            timeout=30
-        )
+        # List available models
+        available_models = client.models.list()
+        print(f"Available models: {[model.id for model in available_models.data]}")
         
-        if response.status_code == 200:
-            result = response.json()
-            content = result["choices"][0]["message"]["content"]
-            print(f"✅ Success!")
-            print(f"📄 Response:")
-            print(f"{'-'*30}")
-            print(f"{content}")
-            print(f"{'-'*30}")
-            print(f"📊 Usage: Tokens used = {result['usage']['total_tokens']}")
-        else:
-            print(f"❌ Error: Status code {response.status_code}")
-            print(f"Response: {response.text}")
+        # Define models to test - only using gemma2-9b-it
+        models = ["gemma2-9b-it"]
+        
+        for model in models:
+            print(f"\nTesting model: {model}")
+            try:
+                chat_completion = client.chat.completions.create(
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are a helpful assistant specialized in mental health."
+                        },
+                        {
+                            "role": "user",
+                            "content": "What are some strategies for managing anxiety?"
+                        }
+                    ],
+                    model=model,
+                    temperature=0.7,
+                    max_tokens=100,
+                )
+                
+                print(f"Response from {model}:")
+                print(chat_completion.choices[0].message.content)
+            except Exception as e:
+                print(f"Error with model {model}: {str(e)}")
+    
     except Exception as e:
-        print(f"❌ Error: {str(e)}")
+        print(f"Error: {str(e)}")
+        return False
+    
+    return True
 
-print("\n✅ Test completed successfully!") 
+if __name__ == "__main__":
+    success = test_models()
+    sys.exit(0 if success else 1) 

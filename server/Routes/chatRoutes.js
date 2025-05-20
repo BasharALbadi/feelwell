@@ -2,11 +2,12 @@ import express from 'express';
 import { 
   createConversation, 
   getUserConversations, 
-  getConversation, 
-  addMessage,
+  getConversationById, 
+  addMessageToConversation, 
+  updateConversation, 
+  deleteConversation,
   addDoctorResponse,
-  updateConversationStatus,
-  getDoctorConversations
+  updateConversationStatus
 } from '../Controllers/ChatController.js';
 import { createChatCompletion } from '../services/aiService.js';
 import fs from 'fs';
@@ -64,6 +65,48 @@ const filterResponse = (response, config) => {
     }
   }
   
+  // Additional thinking pattern removal
+  // Remove paragraphs that look like internal reasoning
+  const thinkingPatterns = [
+    /^(Okay|I see|Let me|Let's|First|Now|Based on|Looking at|Understanding|The user|In this case|I should|I need to|I want to).*?\n\n/is,
+    /^(Okay|I see|Let me|Let's|First|Now|Based on|Looking at|Understanding|The user|In this case|I should|I need to|I want to).*?\. /is,
+    /^.*(I should respond|I will respond|I'll respond|I can respond|I need to|I'll provide|I'll offer|I'll help|I want to|I can help).*?\n\n/is,
+    /^.*(the user is asking|the user wants|the user needs|the user mentioned|the user greeted).*?\n\n/is,
+    /^.*(this is a question about|this question is about|this is asking about).*?\n\n/is
+  ];
+  
+  // Apply all thinking patterns
+  for (const pattern of thinkingPatterns) {
+    if (pattern.test(filtered)) {
+      const paragraphs = filtered.split(/\n\n/);
+      // If there are multiple paragraphs and the first matches a thinking pattern, remove it
+      if (paragraphs.length > 1 && pattern.test(paragraphs[0])) {
+        filtered = paragraphs.slice(1).join('\n\n');
+      }
+    }
+  }
+  
+  // Handle case where the thinking and response are in the same paragraph
+  const separatedByLine = /^.*?(I should|I need to|I'll|I will|I'm going to|I want to).*?\n/is;
+  if (separatedByLine.test(filtered)) {
+    filtered = filtered.replace(separatedByLine, '');
+  }
+  
+  // If response still starts with a typical thinking phrase after all the above,
+  // look for a clear response start indicator
+  const responseStartIndicators = [
+    'Hello!', 'Hi!', 'Hello,', 'Hi,', 'Hello there', 'Hi there', 
+    'Yes,', 'No,', 'Absolutely!', 'Actually,', 'Indeed,'
+  ];
+  
+  for (const indicator of responseStartIndicators) {
+    const index = filtered.indexOf(indicator);
+    if (index > 0) {
+      filtered = filtered.substring(index);
+      break;
+    }
+  }
+  
   // Clean response
   if (config.response_filters && config.response_filters.clean_special_chars) {
     filtered = filtered
@@ -74,14 +117,38 @@ const filterResponse = (response, config) => {
   return filtered.trim();
 };
 
-// Routes for chat conversations
-router.post('/conversations', createConversation);
-router.get('/conversations/user/:userId', getUserConversations);
-router.get('/conversations/doctor/:doctorId', getDoctorConversations);
-router.get('/conversations/:conversationId', getConversation);
-router.post('/conversations/:conversationId/message', addMessage);
-router.post('/conversations/:conversationId/doctor-response', addDoctorResponse);
-router.put('/conversations/:conversationId/status', updateConversationStatus);
+// Rutas para gestión de conversaciones
+router.post('/conversations', (req, res, next) => {
+  console.log('=== CHAT ROUTES: Request to create new conversation ===');
+  console.log('Request body:', JSON.stringify(req.body, null, 2));
+  next();
+}, createConversation);
+
+router.get('/conversations/user/:userId', (req, res, next) => {
+  console.log(`=== CHAT ROUTES: Request to get conversations for user: ${req.params.userId} ===`);
+  next();
+}, getUserConversations);
+
+router.get('/conversations/:id', (req, res, next) => {
+  console.log(`=== CHAT ROUTES: Request to get conversation: ${req.params.id} ===`);
+  next();
+}, getConversationById);
+
+router.post('/conversations/:id/messages', (req, res, next) => {
+  console.log(`=== CHAT ROUTES: Request to add message to conversation: ${req.params.id} ===`);
+  console.log('Message:', JSON.stringify(req.body, null, 2));
+  next();
+}, addMessageToConversation);
+
+router.put('/conversations/:id', (req, res, next) => {
+  console.log(`=== CHAT ROUTES: Request to update conversation: ${req.params.id} ===`);
+  next();
+}, updateConversation);
+
+router.delete('/conversations/:id', (req, res, next) => {
+  console.log(`=== CHAT ROUTES: Request to delete conversation: ${req.params.id} ===`);
+  next();
+}, deleteConversation);
 
 // Ruta para procesar mensajes con IA
 router.post('/completion', async (req, res) => {
@@ -95,9 +162,30 @@ router.post('/completion', async (req, res) => {
     // Procesar el mensaje con el servicio de IA
     let aiResponse = await createChatCompletion(message);
     
+    // Cargar configuración para filtrado
+    const config = loadConfig();
+    
+    // Aplicar filtro para eliminar patrones de pensamiento
+    aiResponse = filterResponse(aiResponse, config);
+    
     // Eliminar cualquier prefijo "Here's the response to:"
     aiResponse = aiResponse.replace(/^Here's the response to:.*?\n?/i, '');
-    aiResponse = aiResponse.trim();
+    
+    // Eliminar cualquier patrón de thinking adicional
+    aiResponse = aiResponse
+      .replace(/<thinking>[\s\S]*?<\/thinking>/g, '')
+      .replace(/<think>[\s\S]*?<\/think>/g, '')
+      .replace(/<thinking>/g, '')
+      .replace(/<\/thinking>/g, '')
+      .replace(/<think>/g, '')
+      .replace(/<\/think>/g, '')
+      .replace(/\(thinking\)[\s\S]*?\(\/thinking\)/g, '')
+      .replace(/\(thinking\)/g, '')
+      .replace(/\(\/thinking\)/g, '')
+      .replace(/\[thinking\][\s\S]*?\[\/thinking\]/g, '')
+      .replace(/\[thinking\]/g, '')
+      .replace(/\[\/thinking\]/g, '')
+      .trim();
     
     // Si hay un ID de conversación, guardar mensaje y respuesta
     if (conversationId) {
@@ -159,6 +247,58 @@ router.get('/conversations/doctor/:doctorId', async (req, res) => {
   } catch (error) {
     console.error("Error fetching doctor's conversations:", error);
     res.status(500).json({ error: "Failed to fetch conversations" });
+  }
+});
+
+// Ruta para enviar respuesta médica
+router.post('/conversations/:id/doctor-response', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { content, doctorId } = req.body;
+    
+    if (!content || !doctorId) {
+      return res.status(400).json({ error: "Content and doctorId are required" });
+    }
+    
+    const conversation = await ChatModel.findById(id);
+    
+    if (!conversation) {
+      return res.status(404).json({ error: "Conversation not found" });
+    }
+    
+    // Verificar que el doctor está asociado a esta conversación
+    if (conversation.doctorId && conversation.doctorId.toString() !== doctorId) {
+      return res.status(403).json({ error: "You are not authorized to respond to this conversation" });
+    }
+    
+    // Si no hay doctor asociado aún, asociarlo
+    if (!conversation.doctorId) {
+      conversation.doctorId = doctorId;
+    }
+    
+    // Añadir mensaje del doctor
+    conversation.messages.push({
+      role: 'assistant',
+      content,
+      fromDoctor: true,
+      timestamp: new Date()
+    });
+    
+    // Actualizar estado si está abierto
+    if (conversation.status === 'open') {
+      conversation.status = 'in-progress';
+    }
+    
+    await conversation.save();
+    
+    res.status(200).json({ 
+      success: true,
+      message: "Doctor response added successfully",
+      conversationId: conversation._id
+    });
+  } catch (error) {
+    console.error("Error adding doctor response:", error);
+    res.status(500).json({ error: "Failed to add doctor response" });
   }
 });
 
@@ -234,5 +374,17 @@ router.delete('/conversations/:id', async (req, res) => {
     res.status(500).json({ error: "Failed to delete conversation" });
   }
 });
+
+// Add routes for doctor responses and updating conversation status
+router.post('/conversations/:conversationId/doctor-response', (req, res, next) => {
+  console.log(`=== CHAT ROUTES: Request to add doctor response to conversation: ${req.params.conversationId} ===`);
+  console.log('Request body:', JSON.stringify(req.body, null, 2));
+  next();
+}, addDoctorResponse);
+
+router.put('/conversations/:conversationId/status', (req, res, next) => {
+  console.log(`=== CHAT ROUTES: Request to update conversation status: ${req.params.conversationId} to ${req.body.status} ===`);
+  next();
+}, updateConversationStatus);
 
 export default router; 

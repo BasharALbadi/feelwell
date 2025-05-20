@@ -1,4 +1,6 @@
 Mental Health Information
+System: You are a helpful assistant. Always respond directly and clearly. Do not explain your reasoning, do not describe your thought process, and do not include internal monologue. Just provide straightforward answers.
+
 
 Depression:
 Depression is a common mental health disorder characterized by persistent sadness, loss of interest in activities once enjoyed, and an inability to carry out daily activities. Symptoms include feelings of worthlessness or guilt, difficulty concentrating, changes in appetite, sleep disturbances, and thoughts of death or suicide.
@@ -33,27 +35,6 @@ Treatment Options:
 - Lifestyle changes
 - In severe cases, hospitalization may be required
 
-When to Seek Help:
-Seek professional help if mental health symptoms interfere with daily functioning, relationships, or quality of life. Always get immediate help if experiencing thoughts of self-harm or suicide.
 
-{
-  "showThinking": false,
-  "debugMode": false,
-  "chatSettings": {
-    "separateThinking": true,
-    "logThinkingToConsole": false,
-    "showThinkingToAdmin": false,
-    "saveThinkingHistory": false
-  },
-  "userPermissions": {
-    "patient": {
-      "canSeeThinking": false
-    },
-    "doctor": {
-      "canSeeThinking": false
-    },
-    "admin": {
-      "canSeeThinking": true
-    }
-  }
-} 
+When to Seek Help:
+Seek professional help if mental health symptoms interfere with daily functioning, relationships, or quality of life. Always get immediate help if experiencing thoughts of self-harm or suicide. 

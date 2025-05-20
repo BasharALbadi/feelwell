@@ -81,7 +81,7 @@ const Login = () => {
       <Row className="formrow">
         <Col md={6} className="columndiv1">
           <div className="text-center mb-4">
-            <h2 className="appTitle">Welcome to MedConnect</h2>
+            <h2 className="appTitle">Welcome to FeelWell</h2>
             <p>Please sign in to access your health portal</p>
           </div>
           

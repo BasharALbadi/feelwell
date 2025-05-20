@@ -15,7 +15,7 @@ const Welcome = () => {
         <Container>
           <Row className="hero-content">
             <Col lg={6} md={8} className="text-white">
-              <h1 className="hero-title">MedConnect Health Portal</h1>
+              <h1 className="hero-title">FeelWell Health Portal</h1>
               <p className="hero-subtitle">
                 Advanced healthcare solutions for better patient outcomes
               </p>
@@ -47,7 +47,7 @@ const Welcome = () => {
             <h2 className="section-title">Your Health, Our Priority</h2>
             <div className="section-divider"></div>
             <p className="section-description">
-              MedConnect provides a comprehensive platform connecting patients with healthcare professionals,
+              FeelWell provides a comprehensive platform connecting patients with healthcare professionals,
               offering personalized care management, secure access to medical records, and innovative health monitoring tools.
             </p>
           </Col>
@@ -139,7 +139,7 @@ const Welcome = () => {
             <Col lg={8} className="mx-auto text-center">
               <h2 className="cta-title">Ready to take control of your health?</h2>
               <p className="cta-description">
-                Join thousands of satisfied users who have transformed their healthcare experience with MedConnect
+                Join thousands of satisfied users who have transformed their healthcare experience with FeelWell
               </p>
               <Link to="/register">
                 <Button className="btn-cta">

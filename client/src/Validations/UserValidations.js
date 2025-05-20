@@ -14,7 +14,12 @@ export const userSchemaValidation = yup.object().shape({
     .required("Confirm password is required"),
   // Optional fields for doctor registration
   specialization: yup.string(),
-  experience: yup.string()
+  experience: yup.string(),
+  // Consent checkbox for data access
+  consentToDataAccess: yup
+    .boolean()
+    .oneOf([true], "You must agree to allow doctors to view your conversations")
+    .required("You must agree to allow doctors to view your conversations")
 
   /*
   age1: yup

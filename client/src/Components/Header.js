@@ -159,7 +159,7 @@ const Header = () => {
                 <FaUserMd size={32} className="me-2" />
               </motion.div>
               <div className="brand-text">
-                <span className="brand-name">MedConnect</span>
+                <span className="brand-name">FeelWell</span>
                 <span className="brand-tagline">Health Portal</span>
               </div>
             </motion.div>

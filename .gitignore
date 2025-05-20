@@ -25,3 +25,4 @@ yarn-error.log*
 
 # Ignore all .env files
 .env*
+.vercel

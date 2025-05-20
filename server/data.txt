@@ -6,7 +6,32 @@
       "^<think>.*$",
       "^.*<\\/think>$",
       "<think>",
-      "<\\/think>"
+      "<\\/think>",
+      "<thinking>[\\s\\S]*?<\\/thinking>",
+      "<thinking>",
+      "<\\/thinking>",
+      "\\(thinking\\)[\\s\\S]*?\\(\\/thinking\\)",
+      "\\(thinking\\)",
+      "\\(\\/thinking\\)",
+      "\\[thinking\\][\\s\\S]*?\\[\\/thinking\\]",
+      "\\[thinking\\]",
+      "\\[\\/thinking\\]",
+      "Let me think about this",
+      "Let's think about this",
+      "Let me break this down",
+      "My thinking is",
+      "^Okay, the user",
+      "^I need to",
+      "^I should",
+      "^The user is asking",
+      "^The user wants to know",
+      "^Looking at the question",
+      "^This seems to be a question about",
+      "^I'll provide",
+      "^I'll respond",
+      "^I want to make sure",
+      "^First, I'll",
+      "^Let me address"
     ],
     "format_output": true,
     "max_tokens": 2000
@@ -25,5 +50,13 @@
     "format_bullet_points": true,
     "paragraph_spacing": 1,
     "line_length_limit": 80
-  }
+  },
+  "chat_settings": {
+    "separateThinking": false,
+    "logThinkingToConsole": false,
+    "showThinkingToAdmin": false,
+    "saveThinkingHistory": false
+  },
+  "showThinking": false,
+  "debugMode": false
 } 

@@ -5,20 +5,22 @@ import mongoose from 'mongoose';
 // Send a new message
 export const sendMessage = async (req, res) => {
   try {
-    const { senderId, receiverId, content, senderType, messageType, inReplyTo, urgency, appointmentId, senderName, receiverName } = req.body;
+    const { 
+      senderId, receiverId, content, senderType, messageType, 
+      inReplyTo, urgency, appointmentId, senderName, receiverName,
+      senderEmail, receiverEmail, role
+    } = req.body;
     
     console.log('Message data received:', { 
-      senderId, 
-      receiverId, 
+      senderId, receiverId, 
+      senderEmail, receiverEmail,
       content: content?.substring(0, 30) + '...', 
-      senderType,
-      senderName,
-      receiverName
+      senderType, senderName, receiverName
     });
     
     // Validate required fields
-    if (!senderId || !receiverId || !content || !senderType) {
-      return res.status(400).json({ message: 'Missing required fields' });
+    if ((!senderId && !senderEmail) || (!receiverId && !receiverEmail) || !content || !senderType) {
+      return res.status(400).json({ message: 'Missing required fields. Need sender and receiver identification, content, and senderType.' });
     }
     
     // Handle non-MongoDB ID formats by making this more flexible
@@ -26,55 +28,109 @@ export const sendMessage = async (req, res) => {
     let receiver = null;
     
     try {
-      // Try to find sender
-      console.log('Looking for sender with ID/email:', senderId);
-      sender = await User.findOne({ 
-        $or: [
-          { _id: mongoose.Types.ObjectId.isValid(senderId) ? senderId : null }, 
-          { id: senderId },
-          { email: senderId }
-        ] 
-      }).select('name fullname email userType');
+      // SENDER LOOKUP - Try all possible ways to find the sender
+      console.log('Looking for sender with ID/email:', senderId || senderEmail);
+      
+      // First, determine if we can convert to MongoDB ObjectId
+      const isSenderIdValidObjectId = senderId && mongoose.Types.ObjectId.isValid(senderId);
+      
+      // Build a flexible query for the sender
+      const senderQuery = {
+        $or: []
+      };
+      
+      // Add all possible identifiers for sender
+      if (isSenderIdValidObjectId) {
+        senderQuery.$or.push({ _id: senderId });
+      }
+      
+      if (senderId) {
+        senderQuery.$or.push({ id: senderId });
+      }
+      
+      if (senderEmail) {
+        senderQuery.$or.push({ email: senderEmail });
+      }
+      
+      // If we have a name, try to match it too as a last resort
+      if (senderName) {
+        senderQuery.$or.push({ fullname: senderName });
+        senderQuery.$or.push({ name: senderName });
+      }
+      
+      console.log('Searching for sender with query:', JSON.stringify(senderQuery, null, 2));
+      
+      // Use the imported User model
+      sender = await User.findOne(senderQuery);
       
       if (!sender) {
-        console.error('Sender not found with ID/email:', senderId);
-        return res.status(404).json({ message: 'Sender not found', id: senderId });
+        console.error('Sender not found with ID/email:', senderId || senderEmail);
+        return res.status(404).json({ message: 'Sender not found', id: senderId, email: senderEmail });
       }
       
       console.log('Found sender:', { 
         id: sender._id, 
         name: sender.fullname || sender.name, 
         email: sender.email,
-        type: sender.userType
+        type: sender.userType || sender.usertype
       });
       
-      // Try to find receiver
-      console.log('Looking for receiver with ID/email:', receiverId);
-      receiver = await User.findOne({ 
-        $or: [
-          { _id: mongoose.Types.ObjectId.isValid(receiverId) ? receiverId : null }, 
-          { id: receiverId },
-          { email: receiverId }
-        ] 
-      }).select('name fullname email userType');
+      // RECEIVER LOOKUP - Try all possible ways to find the receiver
+      console.log('Looking for receiver with ID/email:', receiverId || receiverEmail);
+      
+      // First, determine if we can convert to MongoDB ObjectId
+      const isReceiverIdValidObjectId = receiverId && mongoose.Types.ObjectId.isValid(receiverId);
+      
+      // Build a flexible query for the receiver
+      const receiverQuery = {
+        $or: []
+      };
+      
+      // Add all possible identifiers for receiver
+      if (isReceiverIdValidObjectId) {
+        receiverQuery.$or.push({ _id: receiverId });
+      }
+      
+      if (receiverId) {
+        receiverQuery.$or.push({ id: receiverId });
+      }
+      
+      if (receiverEmail) {
+        receiverQuery.$or.push({ email: receiverEmail });
+      }
+      
+      // If we have a name, try to match it too as a last resort
+      if (receiverName) {
+        receiverQuery.$or.push({ fullname: receiverName });
+        receiverQuery.$or.push({ name: receiverName });
+      }
+      
+      console.log('Searching for receiver with query:', JSON.stringify(receiverQuery, null, 2));
+      
+      // Use the imported User model
+      receiver = await User.findOne(receiverQuery);
       
       if (!receiver) {
-        console.error('Receiver not found with ID/email:', receiverId);
-        return res.status(404).json({ message: 'Receiver not found', id: receiverId });
+        console.error('Receiver not found with ID/email:', receiverId || receiverEmail);
+        return res.status(404).json({ message: 'Receiver not found', id: receiverId, email: receiverEmail });
       }
       
       console.log('Found receiver:', { 
         id: receiver._id, 
         name: receiver.fullname || receiver.name, 
         email: receiver.email,
-        type: receiver.userType
+        type: receiver.userType || receiver.usertype
       });
       
-      // Create new message
+      // Create new message with proper role value
+      const messageRole = role || (senderType === 'doctor' ? 'assistant' : 'user');
+      
       const newMessage = new Message({
         senderId: sender._id,
         receiverId: receiver._id,
         content,
+        // Ensure we use a valid role (required by the Message schema)
+        role: messageRole,
         senderType,
         messageType: messageType || 'direct',
         inReplyTo: inReplyTo || null,
@@ -84,6 +140,16 @@ export const sendMessage = async (req, res) => {
         receiverName: receiverName || receiver.fullname || receiver.name
       });
       
+      // Validate the message before saving
+      const validationError = newMessage.validateSync();
+      if (validationError) {
+        console.error('Message validation error:', validationError);
+        return res.status(400).json({ 
+          message: 'Message validation failed',
+          errors: validationError.errors
+        });
+      }
+      
       await newMessage.save();
       
       console.log('Message saved successfully:', {
@@ -91,7 +157,8 @@ export const sendMessage = async (req, res) => {
         from: newMessage.senderName,
         to: newMessage.receiverName,
         senderId: newMessage.senderId,
-        receiverId: newMessage.receiverId
+        receiverId: newMessage.receiverId,
+        role: newMessage.role
       });
       
       res.status(201).json({ 
@@ -105,6 +172,105 @@ export const sendMessage = async (req, res) => {
     }
   } catch (error) {
     console.error('Error sending message:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// Send a message by email (alternative method)
+export const sendMessageByEmail = async (req, res) => {
+  try {
+    const { 
+      senderEmail, receiverEmail, content, senderType, messageType, 
+      senderName, receiverName, role
+    } = req.body;
+    
+    console.log('Message data received:', { 
+      senderEmail, receiverEmail,
+      content: content?.substring(0, 30) + '...', 
+      senderType, senderName, receiverName
+    });
+    
+    // Validate required fields
+    if (!senderEmail || !receiverEmail || !content || !senderType) {
+      return res.status(400).json({ message: 'Missing required fields. Need sender email, receiver email, content, and senderType.' });
+    }
+    
+    let sender = null;
+    let receiver = null;
+    
+    try {
+      // Find sender by email
+      sender = await User.findOne({ email: senderEmail });
+      
+      if (!sender) {
+        console.error('Sender not found with email:', senderEmail);
+        return res.status(404).json({ message: 'Sender not found', email: senderEmail });
+      }
+      
+      console.log('Found sender:', { 
+        id: sender._id, 
+        name: sender.fullname || sender.name,
+        email: sender.email
+      });
+      
+      // Find receiver by email
+      receiver = await User.findOne({ email: receiverEmail });
+      
+      if (!receiver) {
+        console.error('Receiver not found with email:', receiverEmail);
+        return res.status(404).json({ message: 'Receiver not found', email: receiverEmail });
+      }
+      
+      console.log('Found receiver:', { 
+        id: receiver._id, 
+        name: receiver.fullname || receiver.name,
+        email: receiver.email
+      });
+      
+      // Create message with proper role
+      const messageRole = role || (senderType === 'doctor' ? 'assistant' : 'user');
+      
+      const newMessage = new Message({
+        senderId: sender._id,
+        receiverId: receiver._id,
+        content,
+        role: messageRole,
+        senderType,
+        messageType: messageType || 'direct',
+        senderName: senderName || sender.fullname || sender.name,
+        receiverName: receiverName || receiver.fullname || receiver.name
+      });
+      
+      // Validate the message
+      const validationError = newMessage.validateSync();
+      if (validationError) {
+        console.error('Message validation error:', validationError);
+        return res.status(400).json({ 
+          message: 'Message validation failed',
+          errors: validationError.errors
+        });
+      }
+      
+      await newMessage.save();
+      
+      console.log('Message saved successfully:', {
+        id: newMessage._id,
+        from: newMessage.senderName,
+        to: newMessage.receiverName,
+        role: newMessage.role
+      });
+      
+      res.status(201).json({ 
+        success: true, 
+        message: 'Message sent successfully via email method',
+        data: newMessage
+      });
+    } catch (error) {
+      console.error('Error in email-based message sending:', error);
+      return res.status(500).json({ message: 'Error in email-based message sending', error: error.message });
+    }
+  } catch (error) {
+    console.error('Server error in email-based message:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
@@ -260,59 +426,48 @@ export const getMessagesByPatientEmail = async (req, res) => {
   }
 };
 
-// Get all messages where doctor is the receiver
+// Get messages for a doctor (where doctor is the receiver)
 export const getMessagesForDoctor = async (req, res) => {
   try {
     const { doctorId } = req.params;
     
-    console.log('Getting messages for doctor:', doctorId);
+    console.log('Getting messages for doctor ID:', doctorId);
     
     if (!doctorId) {
+      console.error('Doctor ID is missing in getMessagesForDoctor');
       return res.status(400).json({ message: 'Doctor ID is required' });
     }
     
-    let doctor = null;
+    // Try to find the doctor first to confirm they exist
+    const doctor = await User.findOne({
+      $or: [
+        { _id: mongoose.Types.ObjectId.isValid(doctorId) ? doctorId : null },
+        { id: doctorId }
+      ]
+    });
     
-    // Try to find the doctor by ID or alternate fields
-    try {
-      doctor = await User.findOne({
-        $or: [
-          { _id: mongoose.Types.ObjectId.isValid(doctorId) ? doctorId : null },
-          { id: doctorId },
-          { email: doctorId }
-        ],
-        userType: 'doctor'
-      });
-      
-      if (!doctor) {
-        return res.status(404).json({ message: 'Doctor not found', id: doctorId });
-      }
-      
-      console.log('Found doctor:', doctor._id);
-    } catch (userError) {
-      console.error('Error finding doctor:', userError);
-      return res.status(500).json({ message: 'Error finding doctor', error: userError.message });
+    if (!doctor) {
+      console.error(`Doctor not found with ID: ${doctorId}`);
+      return res.status(404).json({ message: 'Doctor not found' });
     }
     
-    // Find all messages where doctor is the receiver
+    console.log(`Found doctor: ${doctor.fullname || doctor.name} (${doctor._id})`);
+    
+    // Find all messages where the doctor is the receiver
     const messages = await Message.find({
       receiverId: doctor._id
     }).sort({ createdAt: -1 });
     
     console.log(`Found ${messages.length} messages for doctor ${doctorId}`);
     
-    // For debugging purposes, let's log the first few messages
+    // If we found messages, log a sample of the first one
     if (messages.length > 0) {
-      console.log('Sample messages:');
-      messages.slice(0, 3).forEach((msg, index) => {
-        console.log(`Message ${index + 1}:`, {
-          from: msg.senderName,
-          to: msg.receiverName,
-          senderId: msg.senderId,
-          receiverId: msg.receiverId,
-          content: msg.content.substring(0, 30) + '...',
-          date: msg.createdAt
-        });
+      console.log('Sample first message:', {
+        id: messages[0]._id,
+        from: messages[0].senderName,
+        to: messages[0].receiverName,
+        content: messages[0].content.substring(0, 30) + '...',
+        date: messages[0].createdAt
       });
     }
     
