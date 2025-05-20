@@ -1,1 +1,30 @@
-{}
+{
+  "name": "feelwell",
+  "version": "1.0.0",
+  "description": "FeelWell healthcare application",
+  "main": "server/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "cd server && npm start",
+    "client": "cd client && npm start",
+    "server": "cd server && npm start",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "install-all": "npm install && cd client && npm install && cd ../server && npm install",
+    "build": "cd client && npm run build"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "keywords": [
+    "healthcare",
+    "mern",
+    "react",
+    "express",
+    "mongodb"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "concurrently": "^8.0.1"
+  }
+}

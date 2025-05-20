@@ -1,0 +1,40 @@
+services:
+  # الباكند - API service
+  - type: web
+    name: feelwell-api
+    env: node
+    buildCommand: cd server && npm install
+    startCommand: cd server && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 8080
+      - key: CLIENT_URL
+        fromService:
+          name: feelwell-frontend
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASS
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+
+  # الفرونت إند - Frontend service
+  - type: web
+    name: feelwell-frontend
+    env: static
+    buildCommand: cd client && npm install && npm run build
+    staticPublishPath: ./client/build
+    envVars:
+      - key: REACT_APP_API_URL
+        fromService:
+          name: feelwell-api
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL 
